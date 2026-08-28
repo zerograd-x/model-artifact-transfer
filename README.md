@@ -39,9 +39,21 @@ pip install -e '.[test]'
 
 ## Test
 
+Normal unit tests do not access the network:
+
 ```bash
 pytest
 ```
+
+A separate integration test performs a real Hugging Face download of the small
+public `sshleifer/tiny-gpt2` repository, validates the staged config/tokenizer/
+weight files, and replaces only the HDFS upload step with a fake uploader:
+
+```bash
+pytest -o addopts='-q' -m integration tests/integration/test_real_hf_download.py
+```
+
+The real-download integration test also runs as its own GitHub Actions job.
 
 ## Run
 
@@ -74,8 +86,9 @@ src/download_model_pipeline/
   task.py         # temporary staging + HF download + upload
   storage_io.py   # HDFS overwrite parsing and parallel tree upload
   cli.py          # command-line entry point
-
 tests/
+  integration/
+    test_real_hf_download.py
 ```
 
 ## Operational behavior
