@@ -1,33 +1,19 @@
-# download-model-pipeline
+# model-artifact-transfer
 
-A small, portable pipeline for downloading a Hugging Face model repository to a
-temporary local directory and uploading the resulting directory tree to HDFS.
+A small, portable library for moving model artifact trees between storage backends through temporary local staging.
+
+The public API is backend-oriented rather than pipeline-specific:
 
 ```text
-config -> workflow -> download task
-                     |-> snapshot_download() to temporary local storage
-                     `-> parallel hdfs dfs -put to the destination
+ArtifactSource -> temporary local tree -> ArtifactDestination
 ```
 
-The implementation is intentionally simple:
+The first concrete backends are:
 
-- one model repository is processed per invocation;
-- config fields are `hf_repo_id`, `hdfs_path`, and `upload_parallelism` (default 16);
-- the local staging directory name is derived from the destination path;
-- the full Hugging Face repository is downloaded before upload begins;
-- `HDFS_OVERWRITE` is read for each file upload;
-- file uploads run concurrently;
-- upload failures are collected and reported after all submitted uploads finish;
-- a failed upload can leave a partially populated destination;
-- there is no revision pinning, skip-if-exists, resume, rollback, or automatic
-  repo/path consistency check.
+- `HuggingFaceSource`: materializes a Hugging Face repository with `snapshot_download()`;
+- `HdfsDestination`: publishes a local tree with parallel `hdfs dfs -put` operations.
 
-## Requirements
-
-- Python 3.9+
-- `hdfs` CLI available on `PATH` for real uploads
-- network/authentication configured so `huggingface_hub.snapshot_download` can access
-  the target repository
+Additional sources or destinations can implement the same small `materialize()` / `publish()` interfaces without changing the transfer core.
 
 ## Install
 
@@ -37,68 +23,78 @@ source .venv/bin/activate
 pip install -e '.[test]'
 ```
 
-## Test
+## Python API
 
-Normal unit tests do not access the network:
+```python
+from model_artifact_transfer import (
+    HdfsDestination,
+    HuggingFaceSource,
+    transfer_artifact,
+)
+
+transfer_artifact(
+    HuggingFaceSource("Qwen/Qwen3-4B", revision="main"),
+    HdfsDestination(
+        "hdfs://example-cluster/models/Qwen3_4B",
+        parallelism=16,
+    ),
+    staging_name="Qwen3_4B",
+)
+```
+
+## CLI
+
+The general CLI is:
+
+```bash
+model-artifact-transfer \
+  --hf-repo-id Qwen/Qwen3-4B \
+  --hdfs-path hdfs://example-cluster/models/Qwen3_4B
+```
+
+Optional flags include `--revision`, `--upload-parallelism`, and `--overwrite`.
+`--overwrite` sets `HDFS_OVERWRITE=true`, causing HDFS file uploads to use `hdfs dfs -put -f`.
+
+The older `download-model` command remains available temporarily for compatibility.
+
+## Tests
+
+Unit tests do not access the network:
 
 ```bash
 pytest
 ```
 
-A separate integration test performs a real Hugging Face download of the small
-public `sshleifer/tiny-gpt2` repository, validates the staged config/tokenizer/
-weight files, and replaces only the HDFS upload step with a fake uploader:
+The integration test performs a real download of the small public `sshleifer/tiny-gpt2` repository through `HuggingFaceSource`, validates the staged model/tokenizer files, and uses an in-memory inspection destination rather than a real HDFS cluster:
 
 ```bash
 pytest -o addopts='-q' -m integration tests/integration/test_real_hf_download.py
 ```
 
-The real-download integration test also runs as its own GitHub Actions job.
-
-## Run
-
-By default, uploads do not overwrite existing files:
-
-```bash
-download-model \
-  --hf-repo-id Qwen/Qwen3-4B \
-  --hdfs-path hdfs://example-cluster/models/Qwen3_4B_20260824
-```
-
-To allow replacement of existing files:
-
-```bash
-download-model \
-  --hf-repo-id Qwen/Qwen3-4B \
-  --hdfs-path hdfs://example-cluster/models/Qwen3_4B_20260824 \
-  --overwrite
-```
-
-`--overwrite` sets `HDFS_OVERWRITE=true`, causing file uploads to use
-`hdfs dfs -put -f`.
+The real-download integration test also runs in GitHub Actions.
 
 ## Package layout
 
 ```text
+src/model_artifact_transfer/
+  core.py          # source/destination protocols and transfer orchestration
+  huggingface.py   # Hugging Face source backend
+  hdfs.py          # HDFS destination backend
+  hdfs_io.py       # HDFS upload implementation
+  cli.py           # general command-line entry point
+
 src/download_model_pipeline/
-  config.py       # Pydantic configuration
-  workflow.py     # one-task workflow entry point
-  task.py         # temporary staging + HF download + upload
-  storage_io.py   # HDFS overwrite parsing and parallel tree upload
-  cli.py          # command-line entry point
-tests/
-  integration/
-    test_real_hf_download.py
+  ...              # temporary backward-compatibility surface
 ```
 
-## Operational behavior
+## Current behavior and limitations
 
-1. Reusing a destination while overwrite is enabled can replace existing files.
-2. `hf_repo_id` and `hdfs_path` are not cross-validated.
-3. Hugging Face `main` is not pinned to a revision.
-4. Every run downloads and uploads the repository again.
-5. Partial uploads can remain after failure.
-6. Gated/private repositories depend on Hugging Face authentication in the runtime.
-7. Every file in the Hugging Face repository is fetched.
+- the complete source artifact is materialized before publishing begins;
+- HDFS file uploads run concurrently;
+- HDFS upload failures are collected after submitted uploads finish;
+- a failed destination publish can leave a partially populated destination;
+- there is no automatic resume, rollback, or skip-if-exists layer;
+- gated/private Hugging Face repositories depend on authentication in the runtime;
+- `HuggingFaceSource.revision` is optional, so callers should pin a revision when reproducibility matters.
 
-See `docs/hardening.md` for optional production-safety improvements.
+See `docs/hardening.md` for production-safety considerations.
