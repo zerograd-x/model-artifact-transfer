@@ -44,8 +44,6 @@ transfer_artifact(
 
 ## CLI
 
-The general CLI is:
-
 ```bash
 model-artifact-transfer \
   --hf-repo-id Qwen/Qwen3-4B \
@@ -54,8 +52,6 @@ model-artifact-transfer \
 
 Optional flags include `--revision`, `--upload-parallelism`, and `--overwrite`.
 `--overwrite` sets `HDFS_OVERWRITE=true`, causing HDFS file uploads to use `hdfs dfs -put -f`.
-
-The older `download-model` command remains available temporarily for compatibility.
 
 ## Tests
 
@@ -81,10 +77,7 @@ src/model_artifact_transfer/
   huggingface.py   # Hugging Face source backend
   hdfs.py          # HDFS destination backend
   hdfs_io.py       # HDFS upload implementation
-  cli.py           # general command-line entry point
-
-src/download_model_pipeline/
-  ...              # temporary backward-compatibility surface
+  cli.py           # command-line entry point
 ```
 
 ## Current behavior and limitations
