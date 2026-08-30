@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "download-model-pipeline"
+name = "model-artifact-transfer"
 version = "0.1.0"
-description = "A portable Hugging Face model-to-HDFS ingestion pipeline."
+description = "Portable model-artifact transfer primitives with pluggable source and destination backends."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
 test = ["pytest>=8,<9"]
 
 [project.scripts]
+model-artifact-transfer = "model_artifact_transfer.cli:main"
 download-model = "download_model_pipeline.cli:main"
 
 [tool.setuptools.packages.find]
