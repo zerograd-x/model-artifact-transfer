@@ -18,7 +18,6 @@ test = ["pytest>=8,<9"]
 
 [project.scripts]
 model-artifact-transfer = "model_artifact_transfer.cli:main"
-download-model = "download_model_pipeline.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
