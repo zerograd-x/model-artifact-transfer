@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from download_model_pipeline.storage_io import hdfs_upload_tree
+from .hdfs_io import hdfs_upload_tree
 
 
 @dataclass(frozen=True)
