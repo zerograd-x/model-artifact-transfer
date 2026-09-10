@@ -1,16 +1,20 @@
 # Hardening ideas
 
-The baseline implementation is intentionally small. Production deployments may want
-to add some or all of the following safeguards:
+The baseline implementation deliberately keeps the transfer contract small.
+Production deployments may want to add:
 
-- Add `revision` to the config and pin a Hugging Face commit SHA.
-- Add `allow_patterns` / `ignore_patterns` to avoid duplicate `.bin`, GGUF, ONNX, or
-  other unnecessary artifacts.
-- Publish atomically: upload to a staging destination, verify it, then rename/promote.
-- Write a manifest containing repository id, commit SHA, file names, sizes, and
-  checksums.
-- Validate or derive the destination model name from `hf_repo_id`.
-- Refuse an existing destination by default and require explicit replacement.
-- Add skip-if-identical behavior and resumable uploads.
-- Verify shard count, `model.safetensors.index.json`, tokenizer/config files, and total
-  bytes before publishing.
+- Resolve and record the immutable source revision rather than relying only on a
+  symbolic branch or tag.
+- Add `allow_patterns` / `ignore_patterns` for source materialization to avoid
+  transferring unnecessary artifact variants.
+- Generate a manifest containing source identity, file paths, sizes, and
+  checksums before publish.
+- Verify expected model/config/tokenizer files and sharded-weight indexes before
+  accepting an artifact.
+- Upload to a unique staging prefix, verify every object, then publish a small
+  manifest or pointer that marks the artifact complete.
+- Add skip-if-identical behavior based on the manifest rather than destination
+  existence alone.
+- Add resumable multipart or per-file retry semantics for large artifacts.
+- Record total bytes and object count before and after publish.
+- Define an explicit cleanup procedure for abandoned partial prefixes.

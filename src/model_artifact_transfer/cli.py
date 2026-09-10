@@ -1,34 +1,29 @@
 from __future__ import annotations
 
 import argparse
-import os
 
 from .core import transfer_artifact
-from .hdfs import HdfsDestination
 from .huggingface import HuggingFaceSource
+from .s3 import S3Destination
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Transfer a model artifact between storage backends."
+        description="Transfer a Hugging Face model artifact to Amazon S3."
     )
     parser.add_argument("--hf-repo-id", required=True)
-    parser.add_argument("--hdfs-path", required=True)
+    parser.add_argument("--s3-uri", required=True)
     parser.add_argument("--revision")
-    parser.add_argument("--upload-parallelism", type=int, default=16)
-    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--staging-name")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.overwrite:
-        os.environ["HDFS_OVERWRITE"] = "true"
-
-    staging_name = args.hdfs_path.rstrip("/").rsplit("/", 1)[-1]
+    staging_name = args.staging_name or args.hf_repo_id.rstrip("/").rsplit("/", 1)[-1]
     transfer_artifact(
         HuggingFaceSource(args.hf_repo_id, revision=args.revision),
-        HdfsDestination(args.hdfs_path, parallelism=args.upload_parallelism),
+        S3Destination.from_uri(args.s3_uri),
         staging_name=staging_name,
     )
 

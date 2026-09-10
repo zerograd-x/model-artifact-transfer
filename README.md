@@ -1,19 +1,22 @@
 # model-artifact-transfer
 
-A small, portable library for moving model artifact trees between storage backends through temporary local staging.
+A small library for moving complete model artifact trees between pluggable
+sources and destinations through temporary local staging.
 
-The public API is backend-oriented rather than pipeline-specific:
+The transfer core is storage-neutral:
 
 ```text
 ArtifactSource -> temporary local tree -> ArtifactDestination
 ```
 
-The first concrete backends are:
+The built-in endpoints are:
 
-- `HuggingFaceSource`: materializes a Hugging Face repository with `snapshot_download()`;
-- `HdfsDestination`: publishes a local tree with parallel `hdfs dfs -put` operations.
+- `HuggingFaceSource`: materializes a Hugging Face repository with
+  `snapshot_download()`;
+- `S3Destination`: publishes the staged artifact tree to an Amazon S3 prefix.
 
-Additional sources or destinations can implement the same small `materialize()` / `publish()` interfaces without changing the transfer core.
+Additional endpoints can implement the same small `materialize()` or
+`publish()` protocols without changing the transfer core.
 
 ## Install
 
@@ -23,71 +26,80 @@ source .venv/bin/activate
 pip install -e '.[test]'
 ```
 
+AWS credentials use the standard boto3 credential chain.
+
 ## Python API
 
 ```python
 from model_artifact_transfer import (
-    HdfsDestination,
     HuggingFaceSource,
+    S3Destination,
     transfer_artifact,
 )
 
 transfer_artifact(
-    HuggingFaceSource("Qwen/Qwen3-4B", revision="main"),
-    HdfsDestination(
-        "hdfs://example-cluster/models/Qwen3_4B",
-        parallelism=16,
+    HuggingFaceSource(
+        "Qwen/Qwen3-4B",
+        revision="<pinned-revision>",
     ),
-    staging_name="Qwen3_4B",
+    S3Destination.from_uri(
+        "s3://example-bucket/models/qwen3-4b/<version>"
+    ),
+    staging_name="qwen3-4b",
 )
 ```
+
+`S3Destination` treats the destination prefix as immutable. If any object
+already exists under the prefix, publishing fails instead of partially
+overwriting an older artifact. Use a new versioned prefix for a new artifact.
 
 ## CLI
 
 ```bash
 model-artifact-transfer \
   --hf-repo-id Qwen/Qwen3-4B \
-  --hdfs-path hdfs://example-cluster/models/Qwen3_4B
+  --revision <pinned-revision> \
+  --s3-uri s3://example-bucket/models/qwen3-4b/<version>
 ```
 
-Optional flags include `--revision`, `--upload-parallelism`, and `--overwrite`.
-`--overwrite` sets `HDFS_OVERWRITE=true`, causing HDFS file uploads to use `hdfs dfs -put -f`.
+`--staging-name` is optional. By default it uses the final component of the
+Hugging Face repository id.
 
 ## Tests
 
-Unit tests do not access the network:
+Unit tests do not require network or AWS access:
 
 ```bash
 pytest
 ```
 
-The integration test performs a real download of the small public `sshleifer/tiny-gpt2` repository through `HuggingFaceSource`, validates the staged model/tokenizer files, and uses an in-memory inspection destination rather than a real HDFS cluster:
+The integration test performs a real download of the small public
+`sshleifer/tiny-gpt2` repository through `HuggingFaceSource`, validates the
+staged files, and publishes only to an in-memory inspection destination:
 
 ```bash
-pytest -o addopts='-q' -m integration tests/integration/test_real_hf_download.py
+pytest -o addopts='-q' -m integration \
+  tests/integration/test_real_hf_download.py
 ```
-
-The real-download integration test also runs in GitHub Actions.
 
 ## Package layout
 
 ```text
 src/model_artifact_transfer/
   core.py          # source/destination protocols and transfer orchestration
-  huggingface.py   # Hugging Face source backend
-  hdfs.py          # HDFS destination backend
-  hdfs_io.py       # HDFS upload implementation
-  cli.py           # command-line entry point
+  huggingface.py   # Hugging Face source
+  s3.py            # S3 destination
+  cli.py           # Hugging Face -> S3 command-line entry point
 ```
 
 ## Current behavior and limitations
 
-- the complete source artifact is materialized before publishing begins;
-- HDFS file uploads run concurrently;
-- HDFS upload failures are collected after submitted uploads finish;
-- a failed destination publish can leave a partially populated destination;
-- there is no automatic resume, rollback, or skip-if-exists layer;
-- gated/private Hugging Face repositories depend on authentication in the runtime;
-- `HuggingFaceSource.revision` is optional, so callers should pin a revision when reproducibility matters.
+- the complete source artifact is materialized locally before publishing starts;
+- an existing S3 destination prefix is rejected;
+- a failed S3 publish can leave a partially populated prefix;
+- there is no automatic resume, rollback, manifest, or checksum verification yet;
+- gated/private Hugging Face repositories require normal Hugging Face
+  authentication;
+- callers should pin `HuggingFaceSource.revision` when reproducibility matters.
 
-See `docs/hardening.md` for production-safety considerations.
+See `docs/hardening.md` for the next production-safety improvements.
