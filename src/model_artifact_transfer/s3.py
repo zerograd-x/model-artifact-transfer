@@ -17,7 +17,12 @@ class S3Destination:
     client: Any | None = None
 
     def __post_init__(self) -> None:
-        if not self.bucket or "/" in self.bucket:
+        if (
+            not self.bucket
+            or not self.bucket.strip()
+            or self.bucket != self.bucket.strip()
+            or "/" in self.bucket
+        ):
             raise ValueError("bucket must be a non-empty S3 bucket name")
         normalized = self.prefix.strip("/")
         object.__setattr__(self, "prefix", normalized)
