@@ -14,7 +14,6 @@ class S3Destination:
 
     bucket: str
     prefix: str = ""
-    overwrite: bool = False
     client: Any | None = None
 
     def __post_init__(self) -> None:
@@ -28,7 +27,6 @@ class S3Destination:
         cls,
         uri: str,
         *,
-        overwrite: bool = False,
         client: Any | None = None,
     ) -> "S3Destination":
         parsed = urlparse(uri)
@@ -39,7 +37,6 @@ class S3Destination:
         return cls(
             bucket=parsed.netloc,
             prefix=parsed.path.strip("/"),
-            overwrite=overwrite,
             client=client,
         )
 
@@ -74,7 +71,7 @@ class S3Destination:
             raise ValueError(f"Source artifact contains no files: {local_dir}")
 
         client = self._client()
-        if not self.overwrite and self._prefix_exists(client):
+        if self._prefix_exists(client):
             raise FileExistsError(
                 f"Destination already contains objects: {self.uri}"
             )
