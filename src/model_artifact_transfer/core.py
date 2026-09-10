@@ -28,8 +28,14 @@ def transfer_artifact(
     first materializes the complete artifact locally; only then is the tree
     published to the destination.
     """
-    if not staging_name or "/" in staging_name or "\\" in staging_name:
-        raise ValueError("staging_name must be a non-empty path component")
+    if (
+        not staging_name
+        or not staging_name.strip()
+        or staging_name in {".", ".."}
+        or "/" in staging_name
+        or "\\" in staging_name
+    ):
+        raise ValueError("staging_name must be a safe, non-empty path component")
 
     with TemporaryDirectory() as tmp_dir:
         local_dir = f"{tmp_dir}/{staging_name}"
