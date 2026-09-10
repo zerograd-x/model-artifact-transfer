@@ -38,7 +38,7 @@ def test_transfer_artifact_materializes_then_publishes():
     assert not Path(source.local_dir).exists()
 
 
-@pytest.mark.parametrize("name", ["", "a/b", "a\\b"])
+@pytest.mark.parametrize("name", ["", " ", ".", "..", "a/b", "a\\b"])
 def test_transfer_artifact_rejects_invalid_staging_name(name):
     with pytest.raises(ValueError):
         transfer_artifact(FakeSource(), FakeDestination(), staging_name=name)
