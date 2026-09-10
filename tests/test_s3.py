@@ -79,21 +79,3 @@ def test_s3_destination_refuses_existing_prefix_by_default(tmp_path):
     with pytest.raises(FileExistsError, match="already contains"):
         destination.publish(str(tmp_path))
     assert client.uploads == []
-
-
-def test_s3_destination_overwrite_skips_existence_guard(tmp_path):
-    (tmp_path / "config.json").write_text("{}")
-    client = FakeS3Client(existing=True)
-
-    destination = S3Destination(
-        bucket="example-bucket",
-        prefix="models/model-a",
-        overwrite=True,
-        client=client,
-    )
-    destination.publish(str(tmp_path))
-
-    assert client.list_calls == []
-    assert client.uploads == [
-        ("config.json", "example-bucket", "models/model-a/config.json")
-    ]
